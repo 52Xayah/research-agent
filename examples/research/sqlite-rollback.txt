@@ -1,0 +1,9 @@
+SQLite rollback journal mode
+
+SQLite records copies of original database pages in the rollback journal before updating the database file. An interrupted write may leave a hot journal that SQLite uses to restore the earlier database state.
+
+A writer needs an exclusive lock at the point where the main database file is updated. Concurrent reads can therefore be delayed briefly even though readers can otherwise share a read lock.
+
+The choice of journal mode should consider workload, lock contention, storage and recovery requirements.
+
+Source: SQLite documentation, https://sqlite.org/lockingv3.html

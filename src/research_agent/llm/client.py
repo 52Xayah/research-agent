@@ -76,6 +76,20 @@ class OllamaClient:
                         return
             raise LLMProtocolError("Ollama stream ended before its completion frame")
 
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        request = Request(
+            f"{self.settings.url.rstrip('/')}/api/embed",
+            data=json.dumps({"model": self.settings.model, "input": list(texts),
+                             "truncate": False, "keep_alive": "2m"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with self._open(request, stream=False) as response:
+            vectors = self._decode(response.read()).get("embeddings")
+            if not isinstance(vectors, list) or len(vectors) != len(texts):
+                raise LLMProtocolError("Ollama returned an invalid embedding batch")
+            return vectors
+
     @staticmethod
     def _decode(data: bytes) -> dict[str, Any]:
         try:
@@ -115,4 +129,4 @@ class OllamaClient:
             logger.warning("Ollama returned an invalid response (stream=%s)", stream)
             raise
         else:
-            logger.debug("Ollama chat completed (stream=%s, %.3f s)", stream, perf_counter() - started)
+            logger.debug("Ollama request completed (stream=%s, %.3f s)", stream, perf_counter() - started)

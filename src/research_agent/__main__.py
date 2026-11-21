@@ -16,6 +16,8 @@ from research_agent.llm.base import LLMError, ToolCall
 from research_agent.llm.ollama import OllamaLLM
 from research_agent.llm.probe import run_probe
 from research_agent.memory import TaskMemory
+from research_agent.rag.documents import load_corpus
+from research_agent.rag.index import KnowledgeBase, local_embedder
 from research_agent.tools.calculator import Calculator
 from research_agent.tools.file_reader import FileReader
 from research_agent.tools.registry import ToolRegistry
@@ -62,6 +64,10 @@ def main() -> int:
     history_command = commands.add_parser("history", help="list or inspect saved research runs")
     history_command.add_argument("run_id", nargs="?")
     history_command.add_argument("--db", type=Path, default=Path(".research-agent/state.sqlite3"))
+    rag_command = commands.add_parser("rag-search", help="index an authorized document directory and retrieve matches")
+    rag_command.add_argument("root", type=Path)
+    rag_command.add_argument("query")
+    rag_command.add_argument("--limit", type=int, default=4)
     tool_command = commands.add_parser("tool-run", help="execute a tool with JSON arguments from standard input")
     tool_command.add_argument("name", choices=[Calculator.name, FileReader.name, Search.name])
     tool_command.add_argument("--root", type=Path, help="authorized directory for read_file")
@@ -93,6 +99,12 @@ def main() -> int:
         if args.command == "plan":
             result = Planner(OllamaLLM(settings)).plan(args.topic)
             print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+            return 0
+        if args.command == "rag-search":
+            corpus = load_corpus(args.root)
+            matches = KnowledgeBase(corpus.chunks, local_embedder(settings)).retrieve(args.query, args.limit)
+            print(json.dumps({"matches": [asdict(match) for match in matches], "issues": corpus.issues},
+                             ensure_ascii=False, indent=2))
             return 0
         doctor(settings)
     except (OSError, ValueError, KeyError, TypeError, LLMError) as error:
