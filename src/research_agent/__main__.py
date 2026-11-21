@@ -8,9 +8,10 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from research_agent.agent.demo import run_demo
+from research_agent.agent.planning import Planner
 from research_agent.config import OllamaSettings
 from research_agent.function_demo import run_examples
-from research_agent.llm.base import ToolCall
+from research_agent.llm.base import LLMError, ToolCall
 from research_agent.llm.ollama import OllamaLLM
 from research_agent.llm.probe import run_probe
 from research_agent.tools.calculator import Calculator
@@ -54,6 +55,8 @@ def main() -> int:
     commands.add_parser("function-check", help="evaluate live tool calling on six fixed examples")
     agent_command = commands.add_parser("agent-demo", help="run a live multi-tool Agent Loop")
     agent_command.add_argument("--root", type=Path, default=Path("examples"), help="demo input directory")
+    plan_command = commands.add_parser("plan", help="generate and validate a research plan")
+    plan_command.add_argument("topic")
     tool_command = commands.add_parser("tool-run", help="execute a tool with JSON arguments from standard input")
     tool_command.add_argument("name", choices=[Calculator.name, FileReader.name, Search.name])
     tool_command.add_argument("--root", type=Path, help="authorized directory for read_file")
@@ -69,8 +72,12 @@ def main() -> int:
             return 0 if run_examples(OllamaLLM(settings), all_cases=args.command == "function-check") else 1
         if args.command == "agent-demo":
             return 0 if run_demo(OllamaLLM(settings), args.root) else 1
+        if args.command == "plan":
+            result = Planner(OllamaLLM(settings)).plan(args.topic)
+            print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+            return 0
         doctor(settings)
-    except (OSError, ValueError, KeyError, TypeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, LLMError) as error:
         print(f"{args.command} failed: {error}", file=sys.stderr)
         return 1
     return 0
