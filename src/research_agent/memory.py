@@ -37,6 +37,15 @@ CREATE TABLE IF NOT EXISTS messages (
     message TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS messages_by_run ON messages(run_id, id);
+CREATE TABLE IF NOT EXISTS tool_events (
+    id INTEGER PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES runs(id),
+    tool TEXT NOT NULL,
+    ok INTEGER NOT NULL,
+    detail TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS tool_events_by_run ON tool_events(run_id, id);
 """
 
 
@@ -139,6 +148,18 @@ class TaskMemory:
             data["tool_calls"] = tuple(ToolCall(**call) for call in data["tool_calls"])
             messages.append(Message(**data))
         return tuple(messages)
+
+    def record_tool(self, run_id: str, tool: str, ok: bool, detail: str) -> None:
+        with self._connect() as db:
+            db.execute("INSERT INTO tool_events (run_id, tool, ok, detail) VALUES (?, ?, ?, ?)",
+                       (run_id, tool, ok, detail[:240]))
+
+    def tool_events(self, run_id: str) -> list[JsonObject]:
+        with self._connect() as db:
+            rows = db.execute("""
+                SELECT tool, ok, detail, created_at FROM tool_events WHERE run_id=? ORDER BY id DESC LIMIT 100
+            """, (run_id,)).fetchall()
+        return [{**dict(row), "ok": bool(row["ok"])} for row in rows]
 
     @contextmanager
     def claim(self, run_id: str) -> Iterator[None]:

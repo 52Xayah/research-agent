@@ -90,6 +90,7 @@ def main() -> int:
                     "id": run.id, "topic": run.topic, "plan": run.plan.as_dict(),
                     "states": {key: asdict(state) for key, state in memory.states(run.id).items()},
                     "messages": [asdict(message) for message in memory.messages(run.id)],
+                    "tools": memory.tool_events(run.id),
                 }
             else:
                 data = memory.list_runs()

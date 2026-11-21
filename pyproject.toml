@@ -12,6 +12,8 @@ dependencies = []
 
 [project.optional-dependencies]
 rag = ["PyMuPDF>=1.24,<2", "faiss-cpu>=1.9,<2", "numpy>=1.25,<3"]
+app = ["fastapi>=0.115,<1", "uvicorn>=0.32,<1", "streamlit>=1.45,<2", "requests>=2.32,<3"]
+test = ["httpx>=0.28,<1"]
 
 [project.scripts]
 research-agent = "research_agent.__main__:main"

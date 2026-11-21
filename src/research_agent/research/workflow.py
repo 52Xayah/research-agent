@@ -61,14 +61,20 @@ class ResearchWorkflow:
         transcript: list[Message] = []
         budget = _Budget(monotonic() + 180)
 
+        def record(tool: str, ok: bool, detail: str) -> None:
+            self.memory.record_tool(run.id, tool, ok, detail)
+
         def handle(task: Task, prior: Mapping[str, JsonObject]) -> JsonObject:
             nonlocal prepared, kb, articles
             transcript.clear()
             budget.remaining()
             if not prepared:
                 kb = self._prepare_local(run.options.get("root"), issues)
+                if run.options.get("root") is not None:
+                    record("index_documents", kb is not None,
+                           f"{len(kb.chunks)} chunks" if kb else "No usable local index")
                 if self.web is not None:
-                    articles = self._prepare_web(run.options.get("query") or run.topic, issues)
+                    articles = self._prepare_web(run.options.get("query") or run.topic, issues, record)
                 prepared = True
             evidence = []
             task_issues = list(issues)
@@ -76,8 +82,10 @@ class ResearchWorkflow:
                 try:
                     matches = kb.retrieve(task.question, limit=3)
                 except (LLMError, ValueError) as error:
+                    record("retrieve", False, f"{task.id}: {error}")
                     task_issues.append(f"本地检索失败 · {error}")
                 else:
+                    record("retrieve", True, f"{task.id}: {len(matches)} candidates")
                     best = matches[0].score
                     for match in matches:
                         if match.score >= max(0.25, best - 0.22):
@@ -115,18 +123,23 @@ class ResearchWorkflow:
             issues.append(f"无法建立本地知识库 · {error}")
             return None
 
-    def _prepare_web(self, query: str, issues: list[str]) -> tuple[Article, ...]:
+    def _prepare_web(self, query: str, issues: list[str],
+                     record: Callable[[str, bool, str], None]) -> tuple[Article, ...]:
         registry = ToolRegistry()
         registry.register(Search(self.web, timeout=8))
         result = registry.dispatch(ToolCall("search", {"query": query[:256], "limit": 2}))
         if not result.ok:
+            record("search", False, result.error.code)
             issues.append(f"网页搜索失败 · {result.error.code} · {result.error.message}")
             return ()
         articles = []
+        record("search", True, f"{len(result.data['results'])} results")
         for hit in result.data["results"]:
             try:
                 articles.append(self.web.fetch(hit["url"]))
+                record("fetch_article", True, hit["title"])
             except ToolError as error:
+                record("fetch_article", False, f"{hit['title']}: {error.code}")
                 issues.append(f"网页读取失败 · {hit['title']} · {error.code} · {error}")
         if not result.data["results"]:
             issues.append("网页搜索没有返回结果。")
