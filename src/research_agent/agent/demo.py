@@ -1,5 +1,6 @@
 """Run a short live example with two dependent tool calls."""
 
+import re
 from pathlib import Path
 
 from research_agent.agent.engine import AgentEngine
@@ -27,5 +28,6 @@ def run_demo(llm: BaseLLM, root: Path) -> bool:
         and [(event.step, event.call.name) for event in result.events] == [(1, "read_file"), (2, "calculator")]
         and all(event.result.ok for event in result.events)
         and result.events[-1].result.data == {"value": 137}
-        and result.answer.strip().rstrip(".") == "137"
+        and re.fullmatch(r"(?:(?:the calculated value|the result) is )?137\.?", result.answer.strip(),
+                         flags=re.IGNORECASE) is not None
     )

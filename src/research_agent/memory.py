@@ -1,7 +1,6 @@
 """SQLite storage for plans, task checkpoints and conversation messages."""
 
 import json
-import os
 import re
 import sqlite3
 from collections.abc import Iterator
@@ -13,6 +12,7 @@ from uuid import uuid4
 from research_agent.agent.executor import TaskState
 from research_agent.agent.planning import TaskManager
 from research_agent.llm.base import JsonObject, Message, ToolCall
+from research_agent.security import exclusive_lock
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -147,17 +147,5 @@ class TaskMemory:
             raise ValueError("Invalid run ID")
         self.load(run_id)
         lock_dir = self.path.with_name(self.path.name + ".locks")
-        lock_dir.mkdir(exist_ok=True)
-        with (lock_dir / run_id).open("a+b", buffering=0) as lock:
-            try:
-                if os.name == "nt":
-                    import msvcrt
-
-                    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-                else:
-                    import fcntl
-
-                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError as error:
-                raise ValueError(f"Run {run_id} is already active or could not be locked") from error
+        with exclusive_lock(lock_dir / run_id, f"Run {run_id} is already active or could not be locked"):
             yield

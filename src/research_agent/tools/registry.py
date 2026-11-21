@@ -14,13 +14,16 @@ logger = logging.getLogger(__name__)
 class ToolRegistry:
     def __init__(self):
         self._tools: dict[str, BaseTool] = {}
+        self._protected: set[str] = set()
 
-    def register(self, tool: BaseTool) -> None:
+    def register(self, tool: BaseTool, *, requires_approval: bool = False) -> None:
         if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", tool.name):
             raise ValueError("Tool names must be lowercase identifiers of up to 64 characters")
         if tool.name in self._tools:
             raise ValueError(f"Tool already registered: {tool.name}")
         self._tools[tool.name] = tool
+        if requires_approval:
+            self._protected.add(tool.name)
 
     def get(self, name: str) -> BaseTool | None:
         return self._tools.get(name)
@@ -28,10 +31,12 @@ class ToolRegistry:
     def specs(self) -> tuple[ToolSpec, ...]:
         return tuple(tool.spec() for tool in self._tools.values())
 
-    def dispatch(self, call: ToolCall) -> ToolResult:
+    def dispatch(self, call: ToolCall, *, approved: bool = False) -> ToolResult:
         tool = self.get(call.name)
         if tool is None:
             return ToolResult(call.name, error=ToolFailure("unknown_tool", "Tool is not registered"))
+        if tool.name in self._protected and approved is not True:
+            return ToolResult(tool.name, error=ToolFailure("approval_required", "Tool requires explicit approval"))
         try:
             validate_arguments(tool.parameters, call.arguments)
         except InvalidArguments as error:

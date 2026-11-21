@@ -2,7 +2,10 @@
 
 import os
 from dataclasses import dataclass
+from io import TextIOWrapper
 from pathlib import Path
+
+from research_agent.security import open_authorized
 
 MAX_FILE_BYTES = 12 * 1024 * 1024
 MAX_TEXT_CHARS = 100_000
@@ -49,15 +52,19 @@ def chunk_text(text: str, source: str, *, page: int | None = None) -> list[Chunk
     return result
 
 
-def _read_document(path: Path, source: str) -> list[Chunk]:
-    if path.stat().st_size > MAX_FILE_BYTES:
-        raise ValueError("file exceeds 12 MiB")
-    if path.suffix.lower() != ".pdf":
-        with path.open(encoding="utf-8-sig") as handle:
-            text = handle.read(MAX_TEXT_CHARS + 1)
-        if len(text) > MAX_TEXT_CHARS:
-            raise ValueError("text exceeds 100000 characters")
-        return chunk_text(text, source)
+def _read_document(root: Path, path: Path, source: str) -> list[Chunk]:
+    with open_authorized(root, path) as handle:
+        if os.fstat(handle.fileno()).st_size > MAX_FILE_BYTES:
+            raise ValueError("file exceeds 12 MiB")
+        if path.suffix.lower() != ".pdf":
+            with TextIOWrapper(handle, encoding="utf-8-sig") as reader:
+                text = reader.read(MAX_TEXT_CHARS + 1)
+            if len(text) > MAX_TEXT_CHARS:
+                raise ValueError("text exceeds 100000 characters")
+            return chunk_text(text, source)
+        data = handle.read(MAX_FILE_BYTES + 1)
+        if len(data) > MAX_FILE_BYTES:
+            raise ValueError("file exceeds 12 MiB")
     try:
         import pymupdf
     except ImportError as error:
@@ -65,7 +72,7 @@ def _read_document(path: Path, source: str) -> list[Chunk]:
     chunks = []
     size = 0
     try:
-        with pymupdf.open(path) as pdf:
+        with pymupdf.open(stream=data, filetype="pdf") as pdf:
             if pdf.needs_pass or pdf.page_count > 40:
                 raise ValueError("PDF is encrypted or exceeds 40 pages")
             for i, page in enumerate(pdf, start=1):
@@ -109,7 +116,7 @@ def load_corpus(root: Path) -> Corpus:
                 if len(seen) == MAX_FILES:
                     return Corpus(tuple(chunks), (*issues, "Document limit reached (24 files)"))
                 seen.add(resolved)
-                document_chunks = _read_document(resolved, source)
+                document_chunks = _read_document(root, resolved, source)
                 if not document_chunks:
                     raise ValueError("no extractable text")
                 if len(chunks) + len(document_chunks) > MAX_CHUNKS:

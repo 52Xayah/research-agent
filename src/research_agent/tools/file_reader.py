@@ -4,6 +4,7 @@ from pathlib import Path, PureWindowsPath
 
 from research_agent.llm.base import JsonObject
 from research_agent.parameters import Parameter
+from research_agent.security import PathNotAllowed, open_authorized
 from research_agent.tools.base import BaseTool, ToolError
 
 
@@ -42,8 +43,10 @@ class FileReader(BaseTool):
                 raise ToolError("path_not_allowed", "File is outside the authorized directory")
             if target.suffix.lower() not in {".txt", ".md"} or not target.is_file():
                 raise ToolError("unsupported_format", "The target must be a regular .txt or .md file")
-            with target.open("rb") as handle:
+            with open_authorized(self.root, target) as handle:
                 data = handle.read(self.max_bytes + 1)
+        except PathNotAllowed as error:
+            raise ToolError("path_not_allowed", "File is outside the authorized set") from error
         except FileNotFoundError as error:
             raise ToolError("file_not_found", "File does not exist") from error
         except (OSError, RuntimeError, ValueError) as error:

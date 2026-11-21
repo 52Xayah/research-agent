@@ -2,8 +2,9 @@
 
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from time import monotonic
 
 from research_agent.agent.executor import Executor, TaskFailure, TaskState
 from research_agent.agent.planning import Task
@@ -26,6 +27,20 @@ from research_agent.tools.registry import ToolRegistry
 from research_agent.tools.search import Search
 
 
+@dataclass
+class _Budget:
+    deadline: float
+    tokens: int = 0
+
+    def remaining(self) -> float:
+        time_left = self.deadline - monotonic()
+        if time_left <= 0:
+            raise TaskFailure("Research time budget exhausted")
+        if self.tokens >= 24_576:
+            raise TaskFailure("Research Token budget exhausted")
+        return time_left
+
+
 class ResearchWorkflow:
     def __init__(self, llm: BaseLLM, memory: TaskMemory, *, embedder: Callable[[], Embedder],
                  web: Wikipedia | None = None):
@@ -44,10 +59,12 @@ class ResearchWorkflow:
         articles: tuple[Article, ...] = ()
         issues: list[str] = []
         transcript: list[Message] = []
+        budget = _Budget(monotonic() + 180)
 
         def handle(task: Task, prior: Mapping[str, JsonObject]) -> JsonObject:
             nonlocal prepared, kb, articles
             transcript.clear()
+            budget.remaining()
             if not prepared:
                 kb = self._prepare_local(run.options.get("root"), issues)
                 if self.web is not None:
@@ -69,8 +86,9 @@ class ResearchWorkflow:
             for article in articles:
                 evidence.append(Evidence(f"E{len(evidence) + 1}", article.title,
                                          "Wikipedia article introduction", article.text, article.url))
-            findings, gap, rejected = self._analyze(run.topic, task, tuple(evidence), prior, transcript)
-            reviewed = self._review(task, findings, tuple(evidence), transcript) if findings else []
+            budget.remaining()
+            findings, gap, rejected = self._analyze(run.topic, task, tuple(evidence), prior, transcript, budget)
+            reviewed = self._review(task, findings, tuple(evidence), transcript, budget) if findings else []
             return {"evidence": [asdict(item) for item in evidence], "findings": reviewed, "gap": gap,
                     "issues": task_issues, "rejected": rejected, "review_rejected": len(findings) - len(reviewed)}
 
@@ -115,7 +133,8 @@ class ResearchWorkflow:
         return tuple(articles)
 
     def _analyze(self, topic: str, task: Task, evidence: tuple[Evidence, ...],
-                 previous: Mapping[str, JsonObject], transcript: list[Message]) -> tuple[list[JsonObject], str, int]:
+                 previous: Mapping[str, JsonObject], transcript: list[Message],
+                 budget: _Budget) -> tuple[list[JsonObject], str, int]:
         if not evidence:
             return [], "没有可用的网页或本地证据。", 0
         request = {
@@ -142,26 +161,32 @@ class ResearchWorkflow:
                     "Use an empty gap when resolved and no findings only if nothing relevant is supported."),
             Message("user", json.dumps(request, ensure_ascii=False)),
         )
-        data = self._ask(messages, FINDING_SCHEMA, transcript)
+        data = self._ask(messages, FINDING_SCHEMA, transcript, budget)
         try:
             return check_findings(data, evidence)
         except ValueError as error:
             raise TaskFailure(f"Analysis failed: {error}", retryable=True) from error
 
     def _review(self, task: Task, findings: list[JsonObject], evidence: tuple[Evidence, ...],
-                transcript: list[Message]) -> list[JsonObject]:
+                transcript: list[Message], budget: _Budget) -> list[JsonObject]:
         messages = review_messages(task.question, findings, evidence)
-        data = self._ask(messages, REVIEW_SCHEMA, transcript)
+        data = self._ask(messages, REVIEW_SCHEMA, transcript, budget)
         try:
             return review_decisions(data, findings)
         except ValueError as error:
             raise TaskFailure(f"Review failed: {error}", retryable=True) from error
 
-    def _ask(self, messages: tuple[Message, ...], schema: JsonObject, transcript: list[Message]) -> object:
+    def _ask(self, messages: tuple[Message, ...], schema: JsonObject,
+             transcript: list[Message], budget: _Budget) -> object:
+        timeout = budget.remaining()
         transcript.extend(messages)
         try:
-            result = self.llm.chat(messages, response_format=schema)
+            result = self.llm.chat(messages, response_format=schema, timeout=timeout)
             transcript.append(result.message)
+            budget.tokens += (result.input_tokens or 0) + (result.output_tokens or 0)
+            budget.remaining()
+            if result.message.tool_calls:
+                raise TaskFailure("Tools are disabled during evidence analysis")
             if not result.done or result.finish_reason == "length":
                 raise ValueError("Analysis response was incomplete")
             return json.loads(result.message.content)

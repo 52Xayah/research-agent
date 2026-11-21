@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from http.client import HTTPException, HTTPResponse
@@ -14,6 +15,15 @@ from research_agent.config import OllamaSettings
 from research_agent.llm.base import LLMProtocolError, LLMTimeoutError, LLMTransportError
 
 logger = logging.getLogger(__name__)
+MAX_CHAT_BYTES = 512 * 1024
+MAX_EMBEDDING_BYTES = 4 * 1024 * 1024
+
+
+def _finite_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("Non-finite JSON number")
+    return number
 
 
 class OllamaClient:
@@ -60,7 +70,7 @@ class OllamaClient:
     ) -> dict[str, Any]:
         request = self._request(messages, stream=False, response_format=response_format, tools=tools)
         with self._open(request, stream=False, timeout=timeout) as response:
-            result = self._decode(response.read())
+            result = self._decode(response.read(MAX_CHAT_BYTES + 1))
             if result.get("done") is not True:
                 raise LLMProtocolError("Ollama chat response is missing its completion flag")
             return result
@@ -68,7 +78,7 @@ class OllamaClient:
     def stream(self, messages: Sequence[dict[str, Any]]) -> Iterator[dict[str, Any]]:
         request = self._request(messages, stream=True, response_format=None, tools=())
         with self._open(request, stream=True) as response:
-            for line in response:
+            while line := response.readline(MAX_CHAT_BYTES + 1):
                 if line.strip():
                     item = self._decode(line)
                     yield item
@@ -85,15 +95,17 @@ class OllamaClient:
             method="POST",
         )
         with self._open(request, stream=False) as response:
-            vectors = self._decode(response.read()).get("embeddings")
+            vectors = self._decode(response.read(MAX_EMBEDDING_BYTES + 1), limit=MAX_EMBEDDING_BYTES).get("embeddings")
             if not isinstance(vectors, list) or len(vectors) != len(texts):
                 raise LLMProtocolError("Ollama returned an invalid embedding batch")
             return vectors
 
     @staticmethod
-    def _decode(data: bytes) -> dict[str, Any]:
+    def _decode(data: bytes, *, limit: int = MAX_CHAT_BYTES) -> dict[str, Any]:
+        if len(data) > limit:
+            raise LLMProtocolError("Ollama response exceeds the configured size limit")
         try:
-            result = json.loads(data.decode("utf-8"))
+            result = json.loads(data.decode("utf-8"), parse_float=_finite_float, parse_constant=_finite_float)
         except (ValueError, RecursionError) as error:
             raise LLMProtocolError("Ollama returned invalid UTF-8 JSON") from error
         if not isinstance(result, dict):

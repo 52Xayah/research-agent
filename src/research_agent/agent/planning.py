@@ -103,7 +103,7 @@ class Planner:
         for attempt in range(2):
             response = self.llm.chat(tuple(messages), response_format=PLAN_SCHEMA)
             try:
-                if not response.done or response.finish_reason == "length":
+                if not response.done or response.finish_reason == "length" or response.message.tool_calls:
                     raise ValueError("Model plan was incomplete")
                 return TaskManager.from_dict(json.loads(response.message.content))
             except ValueError as error:
