@@ -1,0 +1,155 @@
+{
+  "model": "qwen3.5:4b",
+  "context": 4096,
+  "max_output": 512,
+  "case_count": 6,
+  "mean_seconds": 5.424,
+  "memory_snapshot_bytes": {
+    "size": 3140495604,
+    "size_vram": 3140495604,
+    "context_length": 4096
+  },
+  "totals": {
+    "success": 6,
+    "expected_or_observed": 6,
+    "tool_matches": 6,
+    "argument_matches": 6,
+    "calls": 6,
+    "failures": 0,
+    "input_tokens": 6332,
+    "output_tokens": 204,
+    "measured_responses": 12
+  },
+  "cases": [
+    {
+      "case": "direct",
+      "success": true,
+      "answer": "READY",
+      "reason": "completed",
+      "expected_or_observed": 0,
+      "tool_matches": 0,
+      "argument_matches": 0,
+      "calls": 0,
+      "failures": 0,
+      "seconds": 2.581,
+      "input_tokens": 475,
+      "output_tokens": 2,
+      "measured_responses": 1,
+      "errors": []
+    },
+    {
+      "case": "arithmetic",
+      "success": true,
+      "answer": "107",
+      "reason": "completed",
+      "expected_or_observed": 1,
+      "tool_matches": 1,
+      "argument_matches": 1,
+      "calls": 1,
+      "failures": 0,
+      "seconds": 5.429,
+      "input_tokens": 1040,
+      "output_tokens": 37,
+      "measured_responses": 2,
+      "errors": []
+    },
+    {
+      "case": "division",
+      "success": true,
+      "answer": "3.0",
+      "reason": "completed",
+      "expected_or_observed": 1,
+      "tool_matches": 1,
+      "argument_matches": 1,
+      "calls": 1,
+      "failures": 0,
+      "seconds": 5.531,
+      "input_tokens": 1044,
+      "output_tokens": 39,
+      "measured_responses": 2,
+      "errors": []
+    },
+    {
+      "case": "read",
+      "success": true,
+      "answer": "teal",
+      "reason": "completed",
+      "expected_or_observed": 1,
+      "tool_matches": 1,
+      "argument_matches": 1,
+      "calls": 1,
+      "failures": 0,
+      "seconds": 5.38,
+      "input_tokens": 1043,
+      "output_tokens": 30,
+      "measured_responses": 2,
+      "errors": []
+    },
+    {
+      "case": "read_then_calculate",
+      "success": true,
+      "answer": "79",
+      "reason": "completed",
+      "expected_or_observed": 2,
+      "tool_matches": 2,
+      "argument_matches": 2,
+      "calls": 2,
+      "failures": 0,
+      "seconds": 8.217,
+      "input_tokens": 1699,
+      "output_tokens": 62,
+      "measured_responses": 3,
+      "errors": []
+    },
+    {
+      "case": "chinese",
+      "success": true,
+      "answer": "25",
+      "reason": "completed",
+      "expected_or_observed": 1,
+      "tool_matches": 1,
+      "argument_matches": 1,
+      "calls": 1,
+      "failures": 0,
+      "seconds": 5.404,
+      "input_tokens": 1031,
+      "output_tokens": 34,
+      "measured_responses": 2,
+      "errors": []
+    }
+  ],
+  "citation_cases": [
+    {
+      "case": "supported",
+      "quote_matches": true,
+      "accepted": true,
+      "expected": true,
+      "success": true,
+      "error": null
+    },
+    {
+      "case": "wrong_mechanism",
+      "quote_matches": true,
+      "accepted": false,
+      "expected": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "case": "missing_id",
+      "quote_matches": false,
+      "accepted": false,
+      "expected": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "case": "invented_quote",
+      "quote_matches": false,
+      "accepted": false,
+      "expected": false,
+      "success": true,
+      "error": null
+    }
+  ]
+}

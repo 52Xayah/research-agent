@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 from research_agent.agent.planning import Task, TaskManager
 from research_agent.llm.base import BaseLLM, ChatResponse, Message
 from research_agent.memory import TaskMemory
-from research_agent.research.report import Evidence, check_findings, review_decisions
+from research_agent.research.report import Evidence, check_findings, review_decisions, review_messages
 from research_agent.research.web import Article, Wikipedia
 from research_agent.research.workflow import ResearchWorkflow
 from research_agent.tools.base import ToolError
@@ -17,6 +17,20 @@ from research_agent.tools.search import SearchHit
 
 
 class CitationTests(unittest.TestCase):
+    def test_review_shares_source_text_without_cross_granting_references(self):
+        sources = (Evidence("E1", "a.txt", "line 1", "Shared evidence"),
+                   Evidence("E2", "b.txt", "line 1", "Second evidence"),
+                   Evidence("E3", "c.txt", "line 1", "Uncited evidence"))
+        claims = [
+            {"kind": "finding", "statement": "A", "references": [{"id": "E1", "quote": "..."}]},
+            {"kind": "finding", "statement": "B", "references": [{"id": "E1", "quote": "..."},
+                                                             {"id": "E2", "quote": "..."}]},
+        ]
+        payload = json.loads(review_messages("Question", claims, sources)[1].content)
+        self.assertEqual(payload["sources"], {"E1": "Shared evidence", "E2": "Second evidence"})
+        self.assertEqual([candidate["citation_ids"] for candidate in payload["candidates"]],
+                         [["E1"], ["E1", "E2"]])
+
     def test_review_requires_all_candidates_and_drops_unsupported_statements(self):
         findings = [{"statement": "A"}, {"statement": "B"}]
         decisions = {"decisions": [{"number": 2, "supported": True}, {"number": 1, "supported": False}]}

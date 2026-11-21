@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "chars": 1960,
+    "input_tokens": 422,
+    "output_tokens": 28,
+    "accepted": [
+      "A checkpoint copies committed changes back to the database file."
+    ]
+  },
+  "compact": {
+    "chars": 1381,
+    "input_tokens": 293,
+    "output_tokens": 22,
+    "accepted": [
+      "A checkpoint copies committed changes back to the database file."
+    ]
+  }
+}
