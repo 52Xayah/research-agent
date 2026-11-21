@@ -1,0 +1,2 @@
+Color: teal
+Expression: 9 * 8 + 7

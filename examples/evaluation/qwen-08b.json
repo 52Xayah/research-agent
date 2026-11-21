@@ -1,0 +1,155 @@
+{
+  "model": "qwen3.5:0.8b",
+  "context": 4096,
+  "max_output": 512,
+  "case_count": 6,
+  "mean_seconds": 1.392,
+  "memory_snapshot_bytes": {
+    "size": 573078239,
+    "size_vram": 573078239,
+    "context_length": 4096
+  },
+  "totals": {
+    "success": 2,
+    "expected_or_observed": 6,
+    "tool_matches": 3,
+    "argument_matches": 3,
+    "calls": 3,
+    "failures": 0,
+    "input_tokens": 4376,
+    "output_tokens": 131,
+    "measured_responses": 9
+  },
+  "cases": [
+    {
+      "case": "direct",
+      "success": false,
+      "answer": "I cannot fulfill this request because I am a text-based AI model and do not have the capability to generate or output \"READY\" as a response.",
+      "reason": "completed",
+      "expected_or_observed": 0,
+      "tool_matches": 0,
+      "argument_matches": 0,
+      "calls": 0,
+      "failures": 0,
+      "seconds": 6.906,
+      "input_tokens": 442,
+      "output_tokens": 31,
+      "measured_responses": 1,
+      "errors": []
+    },
+    {
+      "case": "arithmetic",
+      "success": false,
+      "answer": "24",
+      "reason": "completed",
+      "expected_or_observed": 1,
+      "tool_matches": 0,
+      "argument_matches": 0,
+      "calls": 0,
+      "failures": 0,
+      "seconds": 0.125,
+      "input_tokens": 453,
+      "output_tokens": 3,
+      "measured_responses": 1,
+      "errors": []
+    },
+    {
+      "case": "division",
+      "success": false,
+      "answer": "2",
+      "reason": "completed",
+      "expected_or_observed": 1,
+      "tool_matches": 0,
+      "argument_matches": 0,
+      "calls": 0,
+      "failures": 0,
+      "seconds": 0.095,
+      "input_tokens": 454,
+      "output_tokens": 2,
+      "measured_responses": 1,
+      "errors": []
+    },
+    {
+      "case": "read",
+      "success": true,
+      "answer": "teal",
+      "reason": "completed",
+      "expected_or_observed": 1,
+      "tool_matches": 1,
+      "argument_matches": 1,
+      "calls": 1,
+      "failures": 0,
+      "seconds": 0.395,
+      "input_tokens": 977,
+      "output_tokens": 30,
+      "measured_responses": 2,
+      "errors": []
+    },
+    {
+      "case": "read_then_calculate",
+      "success": true,
+      "answer": "79",
+      "reason": "completed",
+      "expected_or_observed": 2,
+      "tool_matches": 2,
+      "argument_matches": 2,
+      "calls": 2,
+      "failures": 0,
+      "seconds": 0.713,
+      "input_tokens": 1600,
+      "output_tokens": 62,
+      "measured_responses": 3,
+      "errors": []
+    },
+    {
+      "case": "chinese",
+      "success": false,
+      "answer": "45",
+      "reason": "completed",
+      "expected_or_observed": 1,
+      "tool_matches": 0,
+      "argument_matches": 0,
+      "calls": 0,
+      "failures": 0,
+      "seconds": 0.12,
+      "input_tokens": 450,
+      "output_tokens": 3,
+      "measured_responses": 1,
+      "errors": []
+    }
+  ],
+  "citation_cases": [
+    {
+      "case": "supported",
+      "quote_matches": true,
+      "accepted": false,
+      "expected": true,
+      "success": false,
+      "error": null
+    },
+    {
+      "case": "wrong_mechanism",
+      "quote_matches": true,
+      "accepted": false,
+      "expected": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "case": "missing_id",
+      "quote_matches": false,
+      "accepted": false,
+      "expected": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "case": "invented_quote",
+      "quote_matches": false,
+      "accepted": false,
+      "expected": false,
+      "success": true,
+      "error": null
+    }
+  ]
+}

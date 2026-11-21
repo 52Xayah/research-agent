@@ -12,6 +12,7 @@ from urllib.request import urlopen
 from research_agent.agent.demo import run_demo
 from research_agent.agent.planning import Planner
 from research_agent.config import OllamaSettings
+from research_agent.evaluation.runner import evaluate
 from research_agent.function_demo import run_examples
 from research_agent.llm.base import LLMError, ToolCall
 from research_agent.llm.ollama import OllamaLLM
@@ -57,6 +58,8 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="check the local Ollama environment")
     commands.add_parser("model-check", help="run live Ollama capability checks")
+    eval_command = commands.add_parser("evaluate", help="score the configured model on fixed tool-use cases")
+    eval_command.add_argument("--output", type=Path, help="save results to a JSON file")
     commands.add_parser("function-demo", help="run a single live tool call with result feedback")
     commands.add_parser("function-check", help="evaluate live tool calling on six fixed examples")
     agent_command = commands.add_parser("agent-demo", help="run a live multi-tool Agent Loop")
@@ -93,6 +96,13 @@ def main() -> int:
             print(json.dumps(data, ensure_ascii=False, indent=2))
             return 0
         settings = OllamaSettings.from_env()
+        if args.command == "evaluate":
+            data = json.dumps(evaluate(settings), ensure_ascii=False, indent=2) + "\n"
+            if args.output:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                args.output.write_text(data, encoding="utf-8")
+            print(data, end="")
+            return 0
         if args.command == "research":
             return run_research(args, settings)
         if args.command == "model-check":
