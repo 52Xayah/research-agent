@@ -6,6 +6,8 @@ import sys
 from urllib.request import urlopen
 
 from research_agent.config import OllamaSettings
+from research_agent.llm.client import OllamaClient
+from research_agent.llm.probe import run_probe
 
 
 def doctor(settings: OllamaSettings) -> None:
@@ -18,10 +20,15 @@ def doctor(settings: OllamaSettings) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Local technical research agent tools")
-    parser.add_argument("command", choices=["doctor"], help="check the local Ollama environment")
-    parser.parse_args()
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("doctor", help="check the local Ollama environment")
+    commands.add_parser("model-check", help="run live Ollama capability checks")
+    args = parser.parse_args()
     try:
-        doctor(OllamaSettings.from_env())
+        settings = OllamaSettings.from_env()
+        if args.command == "model-check":
+            return 0 if run_probe(OllamaClient(settings)) else 1
+        doctor(settings)
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(f"Environment check failed: {error}", file=sys.stderr)
         return 1

@@ -34,3 +34,7 @@
 
 - 复用 Python 3.12.10 虚拟环境并完成可编辑安装。`pip check` 无冲突，模块入口和安装后的命令行入口均通过环境检查，检测到 Ollama 0.40.17 与 `qwen3.5:4b`。
 - 确认 Git 提交身份可用，虚拟环境和本地环境文件已被忽略。用法见 [Windows 开发环境](environment.md)。
+
+## Phase 2 验收记录
+
+- Ollama Client 和 `model-check` 命令已完成。短提示实测通过 6/6，具体输入判定与耗时见[本地模型能力实测](model-capabilities.md)。
