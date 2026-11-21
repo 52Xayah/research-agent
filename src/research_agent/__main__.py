@@ -7,6 +7,7 @@ import sys
 from urllib.request import urlopen
 
 from research_agent.config import OllamaSettings
+from research_agent.function_demo import run_examples
 from research_agent.llm.ollama import OllamaLLM
 from research_agent.llm.probe import run_probe
 
@@ -25,12 +26,16 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="check the local Ollama environment")
     commands.add_parser("model-check", help="run live Ollama capability checks")
+    commands.add_parser("function-demo", help="run a single live tool call with result feedback")
+    commands.add_parser("function-check", help="evaluate live tool calling on six fixed examples")
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.ERROR)
     try:
         settings = OllamaSettings.from_env()
         if args.command == "model-check":
             return 0 if run_probe(OllamaLLM(settings)) else 1
+        if args.command in {"function-demo", "function-check"}:
+            return 0 if run_examples(OllamaLLM(settings), all_cases=args.command == "function-check") else 1
         doctor(settings)
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(f"Environment check failed: {error}", file=sys.stderr)
