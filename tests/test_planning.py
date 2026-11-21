@@ -25,6 +25,15 @@ class PlanningTests(unittest.TestCase):
                          ["b", "a", "blocked"])
         self.assertEqual(llm.chat.call_args.kwargs["response_format"], PLAN_SCHEMA)
 
+    def test_regenerates_invalid_plan_once_with_validation_feedback(self):
+        llm = Mock(spec=BaseLLM)
+        invalid = {"tasks": [{"id": "BAD", "question": "A", "priority": 3, "depends_on": []}]}
+        valid = TaskManager((Task("t1", "A"),)).as_dict()
+        llm.chat.side_effect = [ChatResponse(Message("assistant", json.dumps(value)), True)
+                                for value in (invalid, valid)]
+        self.assertEqual(Planner(llm).plan("Example").as_dict(), valid)
+        self.assertIn("Invalid task ID", llm.chat.call_args.args[0][-1].content)
+
     def test_retry_and_pass_prerequisite_data(self):
         plan = TaskManager((Task("a", "A"), Task("b", "B", depends_on=("a",))))
         handler = Mock(side_effect=[TaskFailure("temporary", retryable=True), {"fact": 4}, {"value": 8}])

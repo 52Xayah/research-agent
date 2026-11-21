@@ -31,7 +31,7 @@ $env:RESEARCH_EMBED_URL = 'http://127.0.0.1:11435'
 
 ## Phase 9 实测
 
-使用 Windows、CPU FAISS 1.16.0、PyMuPDF 1.28.2 和本地 EmbeddingGemma（768 维），对 TXT、Markdown 和程序生成的数字 PDF 共 5 个片段建库。一次冷启动建库耗时 21.41 秒。
+使用 Windows、CPU FAISS 1.16.0、PyMuPDF 1.28.2 和本地 EmbeddingGemma（768 维），对 Phase 9 样本目录最初的三份 TXT 与 Markdown 和一份程序生成的数字 PDF 建库，共 5 个片段。一次冷启动建库耗时 21.41 秒。Phase 10 的 WAL 恢复资料未计入这次实验。
 
 | 固定查询 | 实际 Top 1 | 相似度 |
 |---|---|---:|

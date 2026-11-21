@@ -1,0 +1,8 @@
+SQLite WAL recovery and checkpointing
+
+When a WAL-mode database is reopened, recovery rebuilds the WAL index from the WAL file. It reads frames in order, verifies each checksum and stops at the end of the file or at the first invalid checksum. The index records the last valid commit frame.
+
+Rollback-journal recovery instead uses the original page images saved in a hot journal to restore the prior database contents. The supplied documentation describes these mechanisms without benchmark measurements for recovery time.
+
+Sources: SQLite WAL-mode File Format section 3, https://sqlite.org/walformat.html#recovery
+SQLite File Locking and Concurrency section 4.1, https://sqlite.org/lockingv3.html#hot_journal

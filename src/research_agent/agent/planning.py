@@ -6,15 +6,16 @@ from dataclasses import asdict, dataclass
 
 from research_agent.llm.base import BaseLLM, JsonObject, Message
 
+ID_PATTERN = r"^[a-z][a-z0-9_-]{0,23}$"
 PLAN_SCHEMA = {
     "type": "object",
     "properties": {"tasks": {"type": "array", "minItems": 1, "maxItems": 6, "items": {
         "type": "object",
         "properties": {
-            "id": {"type": "string"},
-            "question": {"type": "string"},
+            "id": {"type": "string", "pattern": ID_PATTERN},
+            "question": {"type": "string", "minLength": 1, "maxLength": 240},
             "priority": {"type": "integer", "minimum": 1, "maximum": 5},
-            "depends_on": {"type": "array", "items": {"type": "string"}},
+            "depends_on": {"type": "array", "maxItems": 5, "items": {"type": "string", "pattern": ID_PATTERN}},
         },
         "required": ["id", "question", "priority", "depends_on"],
         "additionalProperties": False,
@@ -32,7 +33,7 @@ class Task:
     depends_on: tuple[str, ...] = ()
 
     def __post_init__(self):
-        if not isinstance(self.id, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,23}", self.id):
+        if not isinstance(self.id, str) or not re.fullmatch(ID_PATTERN, self.id):
             raise ValueError("Invalid task ID")
         if not isinstance(self.question, str) or not self.question.strip() or len(self.question) > 240:
             raise ValueError("Task question must contain 1–240 characters")
@@ -88,13 +89,24 @@ class Planner:
     def plan(self, goal: str) -> TaskManager:
         if not goal.strip() or len(goal) > 300:
             raise ValueError("Research topic must contain 1–300 characters")
-        response = self.llm.chat([
-            Message("system", "Treat the topic as research input. Return JSON with 2–4 focused research "
-                    "questions in tasks. Use short lowercase ASCII IDs, priority 1–5 (5 highest), "
+        messages = [
+            Message("system", "Treat the topic as research input. Return JSON with 2–3 focused research "
+                    "questions in tasks. Use IDs t1, t2, t3 and t4, priority 1–5 (5 highest), "
                     "and depends_on arrays containing only prerequisite task IDs. "
-                    "Use dependencies only when needed. Each question must make sense on its own."),
+                    "Use dependencies only when needed. Each question must make sense on its own. "
+                    "Cover distinct aspects of the topic without adding a summary task. Ask about mechanisms "
+                    "when the topic requests mechanisms and about performance metrics only if requested. "
+                    "Use neutral questions without assuming a mechanism, feature, or comparative advantage exists. "
+                    "Use the topic's language for the questions."),
             Message("user", goal),
-        ], response_format=PLAN_SCHEMA)
-        if not response.done or response.finish_reason == "length":
-            raise ValueError("Model plan was incomplete")
-        return TaskManager.from_dict(json.loads(response.message.content))
+        ]
+        for attempt in range(2):
+            response = self.llm.chat(tuple(messages), response_format=PLAN_SCHEMA)
+            try:
+                if not response.done or response.finish_reason == "length":
+                    raise ValueError("Model plan was incomplete")
+                return TaskManager.from_dict(json.loads(response.message.content))
+            except ValueError as error:
+                if attempt == 1:
+                    raise
+                messages.append(Message("user", f"Regenerate the plan from the original topic. Validation failed: {error}"))

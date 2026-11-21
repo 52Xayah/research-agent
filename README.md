@@ -4,7 +4,7 @@ Research Agent 面向技术调研。用户提供研究主题，系统规划子�
 
 ## 当前进度
 
-当前里程碑为 Phase 5。环境、Ollama 模型接口、单轮 Function Calling 与工具注册表已完成验收。计算器和文件读取可执行，搜索通过提供方接口接入。多轮 Agent Loop 是[开发路线](docs/roadmap.md)中的下一阶段。
+当前里程碑为 Phase 10。命令行可规划并恢复任务，检索本地 PDF、TXT 和 Markdown，或联网读取维基百科资料，生成带可追溯引用的 Markdown 报告。进度和实测记录见[开发路线](docs/roadmap.md)。
 
 ## 目录
 
@@ -17,16 +17,23 @@ research-agent/
 │   ├── environment.md
 │   ├── function-calling.md
 │   ├── model-capabilities.md
+│   ├── research.md
+│   ├── retrieval.md
 │   ├── roadmap.md
 │   ├── tech-stack.md
 │   └── tools.md
 ├── src/research_agent/
 │   ├── __main__.py
+│   ├── agent/
 │   ├── config.py
 │   ├── function_demo.py
-│   ├── parameters.py
 │   ├── llm/
+│   ├── memory.py
+│   ├── parameters.py
+│   ├── rag/
+│   ├── research/
 │   └── tools/
+├── examples/
 ├── tests/
 ├── pyproject.toml
 ├── .env.example
@@ -45,6 +52,7 @@ research-agent/
 .\.venv\Scripts\python.exe -X utf8 -B -m research_agent doctor
 .\.venv\Scripts\python.exe -X utf8 -B -m research_agent model-check
 .\.venv\Scripts\python.exe -X utf8 -B -m research_agent function-demo
+.\.venv\Scripts\python.exe -X utf8 -B -m research_agent agent-demo
 .\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -v
 ```
 
@@ -59,3 +67,5 @@ research-agent/
 - [技术选型与本地资源策略](docs/tech-stack.md)
 - [本地模型能力实测](docs/model-capabilities.md)
 - [Function Calling 协议与实测](docs/function-calling.md)
+- [本地知识库与检索](docs/retrieval.md)
+- [研究、历史与报告](docs/research.md)

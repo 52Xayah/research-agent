@@ -10,7 +10,7 @@
 | `read_file` | `path`，返回授权根目录内的相对路径与文本 | 支持 UTF-8 的 `.txt` 和 `.md`，默认上限 8192 字节。拒绝绝对路径、父目录跳转、Windows 设备路径和解析后越界的链接。 |
 | `search` | `query` 和可选的 `limit`，返回标题、URL 与摘要 | 默认数量为 5，上限为 10。提供方实现接收超时预算并负责执行。未配置时返回 `search_not_configured`。 |
 
-搜索通过 `SearchProvider` 注入。工具约定覆盖配额或服务错误，提供方可通过 `ToolError` 返回具体错误码。确认实际服务的配额、成本和可用性后接入。当前搜索验收依据是可注入接口、桩测试和未配置处理。
+搜索通过 `SearchProvider` 注入。提供方可通过 `ToolError` 返回配额或服务错误。Phase 5 验收了接口、桩测试和未配置处理。Phase 10 的联网研究使用[维基百科提供方](research.md)，独立的 `tool-run search` 用来复现未配置的返回。
 
 ## 命令行验证
 
