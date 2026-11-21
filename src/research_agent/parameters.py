@@ -54,7 +54,7 @@ class Parameter:
             if self.maximum is not None and value > self.maximum:
                 raise InvalidArguments(f"{name} is above the maximum")
             return
-        raise InvalidArguments(f"{name} must be a {self.kind}")
+        raise InvalidArguments(f"{name} must have type {self.kind}")
 
 
 def parameter_schema(parameters: Mapping[str, Parameter]) -> JsonObject:

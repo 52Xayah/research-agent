@@ -43,7 +43,7 @@ flowchart TD
 
 ## 目标目录
 
-下列目录随对应阶段建立。Phase 0 的实际目录见 [README](../README.md#目录)。
+下列目录随对应阶段建立。当前目录见 [README](../README.md#目录)。
 
 ```text
 src/research_agent/

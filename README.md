@@ -4,7 +4,7 @@ Research Agent 面向技术调研。用户提供研究主题，系统规划子�
 
 ## 当前进度
 
-当前里程碑为 Phase 1。工作区已有 Python 3.12 虚拟环境和 [Ollama 验证脚本](test_ollama.py)。基础包和 `doctor` 命令用于复现开发环境，模型能力和 Agent 功能按[开发路线](docs/roadmap.md)逐阶段验收。
+当前里程碑为 Phase 5。环境、Ollama 模型接口、单轮 Function Calling 与工具注册表已完成验收。计算器和文件读取可执行，搜索通过提供方接口接入。多轮 Agent Loop 是[开发路线](docs/roadmap.md)中的下一阶段。
 
 ## 目录
 
@@ -15,9 +15,19 @@ research-agent/
 │   ├── requirements.md
 │   ├── architecture.md
 │   ├── environment.md
+│   ├── function-calling.md
+│   ├── model-capabilities.md
 │   ├── roadmap.md
-│   └── tech-stack.md
+│   ├── tech-stack.md
+│   └── tools.md
 ├── src/research_agent/
+│   ├── __main__.py
+│   ├── config.py
+│   ├── function_demo.py
+│   ├── parameters.py
+│   ├── llm/
+│   └── tools/
+├── tests/
 ├── pyproject.toml
 ├── .env.example
 ├── .gitignore
@@ -26,15 +36,19 @@ research-agent/
 └── .git/                # 本地 Git 仓库
 ```
 
-## 运行现有验证脚本
+## 开发与实测
 
-在 Windows PowerShell 中进入项目根目录。运行前确认本地 Ollama 服务已启动，且已安装 `qwen3.5:4b`。
+在 Windows PowerShell 中进入项目根目录，按[环境说明](docs/environment.md)准备 Python 3.12 虚拟环境。执行模型实测前启动本地 Ollama，并安装默认模型 `qwen3.5:4b`。
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -B .\test_ollama.py
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -X utf8 -B -m research_agent doctor
+.\.venv\Scripts\python.exe -X utf8 -B -m research_agent model-check
+.\.venv\Scripts\python.exe -X utf8 -B -m research_agent function-demo
+.\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -v
 ```
 
-脚本会向模型发送一条中文提示，并输出回复。它是本地连通性验证入口，后续由 Phase 2 的模型能力测试覆盖多轮、流式、结构化输出与工具调用。
+原有 [test_ollama.py](test_ollama.py) 可独立运行一次中文聊天。完整的固定工具调用样例通过 `function-check` 执行。计算器与文档读取的样例见[工具系统](docs/tools.md)。
 
 ## 项目文档
 
@@ -43,3 +57,5 @@ research-agent/
 - [系统架构与目录规划](docs/architecture.md)
 - [15 个开发阶段与验收条件](docs/roadmap.md)
 - [技术选型与本地资源策略](docs/tech-stack.md)
+- [本地模型能力实测](docs/model-capabilities.md)
+- [Function Calling 协议与实测](docs/function-calling.md)
