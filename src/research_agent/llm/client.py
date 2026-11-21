@@ -56,9 +56,10 @@ class OllamaClient:
         *,
         response_format: dict[str, Any] | str | None = None,
         tools: Sequence[dict[str, Any]] = (),
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         request = self._request(messages, stream=False, response_format=response_format, tools=tools)
-        with self._open(request, stream=False) as response:
+        with self._open(request, stream=False, timeout=timeout) as response:
             result = self._decode(response.read())
             if result.get("done") is not True:
                 raise LLMProtocolError("Ollama chat response is missing its completion flag")
@@ -88,10 +89,11 @@ class OllamaClient:
         return result
 
     @contextmanager
-    def _open(self, request: Request, *, stream: bool) -> Iterator[HTTPResponse]:
+    def _open(self, request: Request, *, stream: bool, timeout: float | None = None) -> Iterator[HTTPResponse]:
         started = perf_counter()
         try:
-            with urlopen(request, timeout=self.settings.timeout) as response:
+            limit = self.settings.timeout if timeout is None else min(timeout, self.settings.timeout)
+            with urlopen(request, timeout=limit) as response:
                 yield response
         except HTTPError as error:
             error.close()

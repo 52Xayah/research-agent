@@ -28,10 +28,12 @@ class OllamaLLM(BaseLLM):
         *,
         response_format: JsonObject | Literal["json"] | None = None,
         tools: Sequence[ToolSpec] = (),
+        timeout: float | None = None,
     ) -> ChatResponse:
         result = self.client.chat(
             [_encode_message(message) for message in messages],
             response_format=response_format,
+            timeout=timeout,
             tools=[
                 {
                     "type": "function",

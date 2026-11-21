@@ -64,6 +64,7 @@ class BaseLLM(ABC):
         *,
         response_format: JsonObject | Literal["json"] | None = None,
         tools: Sequence[ToolSpec] = (),
+        timeout: float | None = None,
     ) -> ChatResponse:
         """Return the next assistant message, with optional tool calls."""
 
