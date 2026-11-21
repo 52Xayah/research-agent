@@ -38,3 +38,8 @@
 ## Phase 2 验收记录
 
 - Ollama Client 和 `model-check` 命令已完成。短提示实测通过 6/6，具体输入判定与耗时见[本地模型能力实测](model-capabilities.md)。
+
+## Phase 3 验收记录
+
+- `BaseLLM` 与 `OllamaLLM` 提供统一消息、工具描述、结果和 Token 统计。适配层处理异常、网络超时及日志。
+- 9 项单元测试通过。切换到新接口后的本地模型复测通过 6/6。

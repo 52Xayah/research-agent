@@ -19,4 +19,17 @@
 
 本轮为 6/6，覆盖短输入和单个模型。Phase 4 扩展到工具选择、参数准确率、实际执行和回传。长文推理、复杂任务成功率和性能统计留待后续阶段测量。
 
+## 模型接口回归
+
+`BaseLLM` 定义普通请求和文本流，统一使用 `Message`、`ToolSpec`、`ToolCall` 与 `ChatResponse`。工具调用走普通请求。流式调用逐帧返回文本，结束帧携带可用的 Token 统计。结构化结果使用 JSON 文本，调用方按自己的模式验证字段和值。
+
+`OllamaLLM` 处理协议转换。客户端使用连接和读取超时，区分超时、传输错误和协议错误。此超时约束网络操作，整个研究任务的执行预算由后续 Agent Loop 负责。`--verbose` 可开启传输状态与耗时日志，日志省略请求和响应正文。
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -X utf8 -B -m research_agent --verbose model-check
+```
+
+Phase 3 独立验收时，9 项模拟 HTTP 单元测试通过，覆盖中文消息序列化、Token 统计、工具消息往返、流完成与关闭、断流、无效响应、超时、连接失败和 HTTP 错误。切换到统一接口后，6 项本地模型实测均通过。
+
 [Ollama Chat API](https://docs.ollama.com/api/chat) · [流式响应格式](https://docs.ollama.com/api/streaming) · [结构化输出](https://docs.ollama.com/capabilities/structured-outputs)

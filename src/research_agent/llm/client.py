@@ -1,11 +1,19 @@
 """Transport for Ollama's native chat endpoint."""
 
 import json
+import logging
 from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from http.client import HTTPException, HTTPResponse
+from time import perf_counter
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from research_agent.config import OllamaSettings
+from research_agent.llm.base import LLMProtocolError, LLMTimeoutError, LLMTransportError
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaClient:
@@ -50,12 +58,59 @@ class OllamaClient:
         tools: Sequence[dict[str, Any]] = (),
     ) -> dict[str, Any]:
         request = self._request(messages, stream=False, response_format=response_format, tools=tools)
-        with urlopen(request, timeout=self.settings.timeout) as response:
-            return json.load(response)
+        with self._open(request, stream=False) as response:
+            result = self._decode(response.read())
+            if result.get("done") is not True:
+                raise LLMProtocolError("Ollama chat response is missing its completion flag")
+            return result
 
     def stream(self, messages: Sequence[dict[str, Any]]) -> Iterator[dict[str, Any]]:
         request = self._request(messages, stream=True, response_format=None, tools=())
-        with urlopen(request, timeout=self.settings.timeout) as response:
+        with self._open(request, stream=True) as response:
             for line in response:
                 if line.strip():
-                    yield json.loads(line)
+                    item = self._decode(line)
+                    yield item
+                    if item.get("done") is True:
+                        return
+            raise LLMProtocolError("Ollama stream ended before its completion frame")
+
+    @staticmethod
+    def _decode(data: bytes) -> dict[str, Any]:
+        try:
+            result = json.loads(data.decode("utf-8"))
+        except (ValueError, RecursionError) as error:
+            raise LLMProtocolError("Ollama returned invalid UTF-8 JSON") from error
+        if not isinstance(result, dict):
+            raise LLMProtocolError("Ollama returned a non-object JSON response")
+        if "error" in result:
+            raise LLMProtocolError("Ollama reported an error in its response")
+        return result
+
+    @contextmanager
+    def _open(self, request: Request, *, stream: bool) -> Iterator[HTTPResponse]:
+        started = perf_counter()
+        try:
+            with urlopen(request, timeout=self.settings.timeout) as response:
+                yield response
+        except HTTPError as error:
+            error.close()
+            logger.warning("Ollama HTTP status %s (stream=%s)", error.code, stream)
+            raise LLMTransportError(f"Ollama returned HTTP {error.code}") from error
+        except URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                logger.warning("Ollama connection timed out")
+                raise LLMTimeoutError("Ollama connection timed out") from error
+            logger.warning("Ollama connection failed")
+            raise LLMTransportError("Could not reach Ollama") from error
+        except TimeoutError as error:
+            logger.warning("Ollama response timed out")
+            raise LLMTimeoutError("Ollama response timed out") from error
+        except (OSError, HTTPException) as error:
+            logger.warning("Ollama transport failed: %s", type(error).__name__)
+            raise LLMTransportError("Ollama connection was interrupted") from error
+        except LLMProtocolError:
+            logger.warning("Ollama returned an invalid response (stream=%s)", stream)
+            raise
+        else:
+            logger.debug("Ollama chat completed (stream=%s, %.3f s)", stream, perf_counter() - started)
