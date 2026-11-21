@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -14,6 +15,7 @@ from research_agent.function_demo import run_examples
 from research_agent.llm.base import LLMError, ToolCall
 from research_agent.llm.ollama import OllamaLLM
 from research_agent.llm.probe import run_probe
+from research_agent.memory import TaskMemory
 from research_agent.tools.calculator import Calculator
 from research_agent.tools.file_reader import FileReader
 from research_agent.tools.registry import ToolRegistry
@@ -57,6 +59,9 @@ def main() -> int:
     agent_command.add_argument("--root", type=Path, default=Path("examples"), help="demo input directory")
     plan_command = commands.add_parser("plan", help="generate and validate a research plan")
     plan_command.add_argument("topic")
+    history_command = commands.add_parser("history", help="list or inspect saved research runs")
+    history_command.add_argument("run_id", nargs="?")
+    history_command.add_argument("--db", type=Path, default=Path(".research-agent/state.sqlite3"))
     tool_command = commands.add_parser("tool-run", help="execute a tool with JSON arguments from standard input")
     tool_command.add_argument("name", choices=[Calculator.name, FileReader.name, Search.name])
     tool_command.add_argument("--root", type=Path, help="authorized directory for read_file")
@@ -65,6 +70,19 @@ def main() -> int:
     try:
         if args.command == "tool-run":
             return run_tool(args.name, args.root)
+        if args.command == "history":
+            memory = TaskMemory(args.db)
+            if args.run_id:
+                run = memory.load(args.run_id)
+                data = {
+                    "id": run.id, "topic": run.topic, "plan": run.plan.as_dict(),
+                    "states": {key: asdict(state) for key, state in memory.states(run.id).items()},
+                    "messages": [asdict(message) for message in memory.messages(run.id)],
+                }
+            else:
+                data = memory.list_runs()
+            print(json.dumps(data, ensure_ascii=False, indent=2))
+            return 0
         settings = OllamaSettings.from_env()
         if args.command == "model-check":
             return 0 if run_probe(OllamaLLM(settings)) else 1
