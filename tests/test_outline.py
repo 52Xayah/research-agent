@@ -12,6 +12,31 @@ from research_agent.research.workflow import ResearchWorkflow
 
 @unittest.skipUnless(importlib.util.find_spec("pymupdf"), "RAG extra is missing")
 class OutlineTests(unittest.TestCase):
+    def test_merges_wrapped_heading_and_keeps_algorithm_inside_section(self):
+        import pymupdf
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
+            root = Path(folder)
+            with pymupdf.open() as pdf:
+                method = pdf.new_page()
+                method.insert_text((40, 40), "3. Method", fontname="hebo")
+                method.insert_text((40, 70), "3.1. Estimation with\na split-and-merge model", fontname="hebo")
+                details = pdf.new_page()
+                details.insert_text((40, 45), "Algorithm 1: Pseudocode\nInput: features\n"
+                                    "13 end\nOutput: prototypes", fontname="hebo")
+                details.insert_text((40, 130),
+                                    "We split separable clusters and merge overlapping clusters to estimate prototypes.")
+                details.insert_text((40, 170), "4. Experiments", fontname="hebo")
+                pdf.save(root / "layout.pdf")
+            outlines, issues = extract_outlines(root)
+
+        self.assertEqual(issues, [])
+        self.assertEqual([section.title for section in outlines[0].sections],
+                         ["3. Method", "3.1. Estimation with a split-and-merge model", "4. Experiments"])
+        section = outlines[0].sections[1]
+        self.assertEqual((section.page, section.last_page, section.excerpt.page), (1, 2, 2))
+        self.assertIn("merge overlapping clusters", section.excerpt.text)
+
     def test_unbookmarked_pdf_renders_numbered_sections_and_physical_pages(self):
         import pymupdf
 

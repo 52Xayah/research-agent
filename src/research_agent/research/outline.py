@@ -26,6 +26,8 @@ _PARTS = re.compile(
     re.I,
 )
 _CAPTION = re.compile(r"^(?:fig(?:ure)?\.?|table)\s+\d|^[图表]\s*\d", re.I)
+_ALGORITHM_CAPTION = re.compile(r"^(?:algorithm\s+\d+|算法\s*\d+)\s*[:：.]", re.I)
+_ALGORITHM_OUTPUT = re.compile(r"^(?:output|输出)\s*[:：]", re.I)
 _SENTENCE = re.compile(r"(?<!Tab\.)(?<!Fig\.)(?<!Eq\.)(?<=[.!?。！？])\s+")
 _SUBSTANTIVE = re.compile(
     r"\b(?:propose|show|introduce|study|find|achiev\w*|improv\w*|outperform\w*|result\w*|"
@@ -45,6 +47,10 @@ class _Line:
     block: int
     text: str
     emphasized: bool
+    fonts: frozenset[str]
+    size: float
+    bounds: tuple[float, float, float, float]
+    small_number: bool
 
 
 @dataclass(frozen=True)
@@ -131,22 +137,37 @@ def _extract_pdf(root: Path, path: Path) -> PaperOutline:
                     emphasized = all(span["flags"] & pymupdf.TEXT_FONT_BOLD or
                                      re.search(r"bold|medi|semibold|demi|heavy", span["font"], re.I)
                                      for span in spans)
-                    lines.append(_Line(number, block_number, text, emphasized))
+                    font_size = max(span["size"] for span in spans)
+                    leading = spans[0]
+                    lines.append(_Line(
+                        number, block_number, text, emphasized,
+                        frozenset(span["font"] for span in spans), font_size, item["bbox"],
+                        leading["text"].strip().isdecimal() and leading["size"] < 0.85 * font_size,
+                    ))
             text_pages += len(lines) > before
         pages = pdf.page_count
-    headings: list[tuple[int, int, str]] = []
+    lines = _without_algorithm_boxes(lines)
+    headings: list[tuple[int, int, int, str]] = []
+    body_start = 0
     for index, line in enumerate(lines):
+        if index < body_start:
+            continue
         level = _heading_level(line)
         if level:
-            headings.append((index, level, line.text))
+            title = line.text
+            body_start = index + 1
+            while body_start < len(lines) and _continues_heading(lines[body_start - 1], lines[body_start], title):
+                title += " " + lines[body_start].text
+                body_start += 1
+            headings.append((index, body_start, level, title))
     sections = []
-    for order, (start, level, title) in enumerate(headings):
+    for order, (start, body_start, level, title) in enumerate(headings):
         following = headings[order + 1:]
         next_heading = following[0][0] if following else len(lines)
-        end = next((index for index, depth, _ in following if depth <= level), len(lines))
-        children = tuple(text for index, depth, text in following if index < end and depth == level + 1)
+        end = next((index for index, _, depth, _ in following if depth <= level), len(lines))
+        children = tuple(text for index, _, depth, text in following if index < end and depth == level + 1)
         excerpt = None if title.casefold() in {"references", "bibliography", "参考文献"} else (
-            _excerpt(lines[start + 1:next_heading])
+            _excerpt(lines[body_start:next_heading])
         )
         sections.append(Section(title, level, lines[start].page, lines[end - 1].page, children, excerpt))
     return PaperOutline(path.relative_to(root).as_posix(), pages, text_pages, tuple(sections))
@@ -158,9 +179,50 @@ def _heading_level(line: _Line) -> int:
     if len(line.text) > 155 or line.text.endswith((".", "。", "!", "？", "?")):
         return 0
     if match := _NUMBERED.fullmatch(line.text):
-        if line.emphasized or match[2].isupper():
+        if not line.small_number and (line.emphasized or match[2].isupper()):
             return match[1].count(".") + 1
     return int(line.emphasized and bool(_CHINESE.match(line.text)))
+
+
+def _continues_heading(previous: _Line, candidate: _Line, title: str) -> bool:
+    left, top, right, _ = previous.bounds
+    next_left, next_top, next_right, _ = candidate.bounds
+    return (
+        previous.page == candidate.page
+        and previous.block == candidate.block
+        and previous.emphasized and candidate.emphasized
+        and previous.fonts == candidate.fonts
+        and abs(previous.size - candidate.size) <= 0.25
+        and 0 < next_top - top <= previous.size * 1.7
+        and max(left, next_left) < min(right, next_right)
+        and not _heading_level(candidate)
+        and not _NUMBERED.match(candidate.text)
+        and not candidate.text.endswith((".", "。", "!", "？", "?"))
+        and len(title) + len(candidate.text) <= 180
+    )
+
+
+def _without_algorithm_boxes(lines: list[_Line]) -> list[_Line]:
+    excluded = set()
+    for index, caption in enumerate(lines):
+        if not _ALGORITHM_CAPTION.match(caption.text):
+            continue
+        left, top, right, _ = caption.bounds
+        box = []
+        for following in range(index + 1, len(lines)):
+            line = lines[following]
+            if line.page != caption.page:
+                break
+            x, y, _, _ = line.bounds
+            if y < top or not left - 2 * caption.size <= x < right:
+                continue
+            if _ALGORITHM_CAPTION.match(line.text):
+                break
+            box.append(following)
+            if _ALGORITHM_OUTPUT.match(line.text):
+                excluded.update([index, *box])
+                break
+    return [line for index, line in enumerate(lines) if index not in excluded]
 
 
 def _excerpt(lines: list[_Line]) -> Excerpt | None:
