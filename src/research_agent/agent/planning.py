@@ -86,7 +86,7 @@ class Planner:
     def __init__(self, llm: BaseLLM):
         self.llm = llm
 
-    def plan(self, goal: str) -> TaskManager:
+    def plan(self, goal: str, *, context: str | None = None) -> TaskManager:
         if not goal.strip() or len(goal) > 300:
             raise ValueError("Research topic must contain 1–300 characters")
         messages = [
@@ -97,9 +97,12 @@ class Planner:
                     "Cover distinct aspects of the topic without adding a summary task. Ask about mechanisms "
                     "when the topic requests mechanisms and about performance metrics only if requested. "
                     "Use neutral questions without assuming a mechanism, feature, or comparative advantage exists. "
-                    "Use the topic's language for the questions."),
-            Message("user", goal),
+                    "Use the topic's language for the questions. If previous context is provided, "
+                    "use it only to resolve references and never carry over its independent requests."),
         ]
+        if context:
+            messages.append(Message("user", f"Previous topic for context only: {context[:300]}"))
+        messages.append(Message("user", goal))
         for attempt in range(2):
             response = self.llm.chat(tuple(messages), response_format=PLAN_SCHEMA)
             try:

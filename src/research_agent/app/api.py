@@ -26,6 +26,8 @@ class JobRequest(BaseModel):
     online: bool = False
     query: str | None = Field(default=None, min_length=1, max_length=256)
     parent_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
+    reuse_documents: bool = True
+    include_previous_topic: bool = False
 
 
 def create_app(root: Path | None = None, settings: OllamaSettings | None = None) -> FastAPI:
@@ -75,7 +77,9 @@ def create_app(root: Path | None = None, settings: OllamaSettings | None = None)
     def create_job(request: Request, job: JobRequest):
         service: JobService = request.app.state.service
         try:
-            return service.create(job.topic, job.documents, job.online, job.query, job.parent_id)
+            return service.create(job.topic, job.documents, job.online, job.query, job.parent_id,
+                                  reuse_documents=job.reuse_documents,
+                                  include_previous_topic=job.include_previous_topic)
         except QueueFull as error:
             raise HTTPException(429, str(error)) from error
         except KeyError as error:

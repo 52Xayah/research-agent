@@ -5,12 +5,12 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from research_agent.agent.planning import Planner
 from research_agent.config import OllamaSettings
 from research_agent.llm.base import Message
 from research_agent.llm.ollama import OllamaLLM
 from research_agent.memory import TaskMemory
 from research_agent.rag.index import local_embedder
+from research_agent.research.outline import OUTLINE_TASK, research_plan
 from research_agent.research.web import Wikipedia
 from research_agent.research.workflow import ResearchWorkflow
 
@@ -45,7 +45,7 @@ def run_research(args: argparse.Namespace, settings: OllamaSettings) -> int:
         if root is not None and not root.is_dir():
             raise ValueError("--root must be a directory")
         web = _web() if args.online else None
-        plan = Planner(model).plan(args.topic)
+        plan = research_plan(model, args.topic, root)
         run_id = memory.create(args.topic, plan, {
             "root": str(root) if root else None, "online": args.online, "query": args.query,
         })
@@ -57,7 +57,8 @@ def run_research(args: argparse.Namespace, settings: OllamaSettings) -> int:
     output = args.output or memory.path.parent / "reports" / f"{run.id}.md"
     _write_report(output, report)
     issues = sum(state.status != "succeeded" for state in states.values())
-    print(f"Report: {output.resolve()} | {count} cited findings | {issues} failed or blocked tasks")
+    unit = "sections located" if OUTLINE_TASK in states else "cited findings"
+    print(f"Report: {output.resolve()} | {count} {unit} | {issues} failed or blocked tasks")
     return 0 if count and not issues else 2
 
 

@@ -5,13 +5,13 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 
-from research_agent.agent.planning import Planner
 from research_agent.app.storage import AppStorage
 from research_agent.config import OllamaSettings
 from research_agent.llm.base import LLMError, Message
 from research_agent.llm.ollama import OllamaLLM
 from research_agent.memory import TaskMemory
 from research_agent.rag.index import local_embedder
+from research_agent.research.outline import research_plan
 from research_agent.research.web import Wikipedia
 from research_agent.research.workflow import ResearchWorkflow
 
@@ -30,7 +30,8 @@ class JobService:
         self.worker.shutdown(wait=True, cancel_futures=True)
 
     def create(self, topic: str, uploads: list[str], online: bool,
-               query: str | None, parent_id: str | None) -> dict:
+               query: str | None, parent_id: str | None, *,
+               reuse_documents: bool = True, include_previous_topic: bool = False) -> dict:
         topic = topic.strip()
         if not topic:
             raise ValueError("Enter a research topic")
@@ -39,7 +40,9 @@ class JobService:
             if not online or not query:
                 raise ValueError("A search expression requires online research")
         parent = self.storage.get(parent_id) if parent_id else None
-        if parent is not None:
+        if include_previous_topic and parent is None:
+            raise ValueError("A previous job is required to include its topic")
+        if parent is not None and reuse_documents:
             inherited = [item["id"] for item in parent["options"]["documents"]]
             uploads = list(dict.fromkeys([*inherited, *uploads]))
         docs = self.storage.documents(uploads)
@@ -47,8 +50,10 @@ class JobService:
             raise ValueError("Upload a document or explicitly enable Wikipedia search")
         if online:
             Wikipedia(os.getenv("RESEARCH_WIKI_CONTACT", ""))
-        key = self.storage.enqueue(topic, {"documents": docs, "online": online, "query": query,
-                                           "parent_id": parent_id, "prior_topic": parent["topic"] if parent else None})
+        key = self.storage.enqueue(topic, {
+            "documents": docs, "online": online, "query": query, "parent_id": parent_id,
+            "prior_topic": parent["topic"] if include_previous_topic else None,
+        })
         self.worker.submit(self._execute, key)
         return self.describe(key)
 
@@ -87,10 +92,7 @@ class JobService:
             run_id = job["run_id"]
             if run_id is None:
                 root = self.storage.stage(key, options["documents"])
-                goal = job["topic"]
-                if options["prior_topic"] and len(goal) < 240:
-                    goal = (f"{goal}\nPrevious topic for context: {options['prior_topic']}")[:300]
-                plan = Planner(llm).plan(goal)
+                plan = research_plan(llm, job["topic"], root, context=options.get("prior_topic"))
                 run_id = self.memory.create(job["topic"], plan, {
                     "root": str(root) if root else None, "online": options["online"], "query": options["query"],
                 })

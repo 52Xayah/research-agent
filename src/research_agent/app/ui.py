@@ -104,7 +104,8 @@ def main() -> None:
                                  accept_multiple_files=True, key=f"documents-{upload_round}")
         online = st.checkbox("允许向英文维基百科发送搜索词")
         query = st.text_input("搜索词（可选）", max_chars=256) if online else ""
-        follow_up = bool(selected and st.checkbox("追问当前任务并沿用其已上传资料"))
+        reuse_documents = bool(selected and st.checkbox("沿用当前任务的已上传资料", key=f"reuse-{selected}"))
+        include_topic = bool(selected and st.checkbox("把上一轮问题作为背景", key=f"context-{selected}"))
     if topic := st.chat_input("输入一个技术研究问题", max_chars=300):
         if len(files) > 8 or sum(file.size for file in files) > 32 * 1024 * 1024:
             st.error("每个任务最多 8 份文件，合计不超过 32 MiB。")
@@ -120,7 +121,9 @@ def main() -> None:
             ]
             job = request("POST", "/jobs", json={"topic": topic, "documents": document_ids, "online": online,
                                                 "query": query.strip() or None,
-                                                "parent_id": selected if follow_up else None}).json()
+                                                "parent_id": selected if reuse_documents or include_topic else None,
+                                                "reuse_documents": reuse_documents,
+                                                "include_previous_topic": include_topic}).json()
         except (requests.RequestException, ValueError) as error:
             st.error(f"无法提交任务 · {error}")
         else:

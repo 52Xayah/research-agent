@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 from research_agent.agent.planning import Task, TaskManager
 from research_agent.llm.base import BaseLLM, ChatResponse, Message
 from research_agent.memory import TaskMemory
-from research_agent.research.report import Evidence, check_findings, review_decisions, review_messages
+from research_agent.research.report import Evidence, check_findings, resolve_citations, review_decisions, review_messages
 from research_agent.research.web import Article, Wikipedia
 from research_agent.research.workflow import ResearchWorkflow
 from research_agent.tools.base import ToolError
@@ -17,6 +17,14 @@ from research_agent.tools.search import SearchHit
 
 
 class CitationTests(unittest.TestCase):
+    def test_resolves_real_excerpts_and_rejects_unknown_ids(self):
+        source = Evidence("E1", "notes.pdf", "p. 2", "We study general category discovery.")
+        claim = {"kind": "finding", "statement": "The paper studies category discovery.", "references": ["E1"]}
+        data = {"findings": [claim, {**claim, "references": ["E99"]}], "gap": ""}
+        accepted, _, rejected = resolve_citations(data, (source,))
+        self.assertEqual(accepted[0]["references"], [{"id": "E1", "quote": source.text}])
+        self.assertEqual(rejected, 1)
+
     def test_review_shares_source_text_without_cross_granting_references(self):
         sources = (Evidence("E1", "a.txt", "line 1", "Shared evidence"),
                    Evidence("E2", "b.txt", "line 1", "Second evidence"),
@@ -109,7 +117,7 @@ class WorkflowTests(unittest.TestCase):
                                              "SQLite uses a write-ahead log.")
         analysis = ChatResponse(Message("assistant", json.dumps({
             "findings": [{"kind": "finding", "statement": "SQLite can write to a WAL.",
-                          "references": [{"id": "E1", "quote": "uses a write-ahead log"}]}], "gap": "",
+                          "references": ["E1"]}], "gap": "",
         })), True)
         review = ChatResponse(Message("assistant", '{"decisions":[{"number":1,"supported":true}]}'), True)
         self.model.chat.side_effect = [analysis, review]

@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from textwrap import wrap
 from time import monotonic
 
 from research_agent.agent.executor import Executor, TaskFailure, TaskState
@@ -12,12 +13,13 @@ from research_agent.llm.base import BaseLLM, JsonObject, LLMError, Message, Tool
 from research_agent.memory import RunRecord, TaskMemory
 from research_agent.rag.documents import load_corpus
 from research_agent.rag.index import Embedder, KnowledgeBase
+from research_agent.research.outline import OUTLINE_TASK, extract_outlines
 from research_agent.research.report import (
     FINDING_SCHEMA,
     REVIEW_SCHEMA,
     Evidence,
-    check_findings,
     render_report,
+    resolve_citations,
     review_decisions,
     review_messages,
 )
@@ -68,6 +70,12 @@ class ResearchWorkflow:
             nonlocal prepared, kb, articles
             transcript.clear()
             budget.remaining()
+            if task.id == OUTLINE_TASK and run.options.get("root"):
+                outlines, warnings = extract_outlines(Path(run.options["root"]))
+                section_count = sum(len(outline.sections) for outline in outlines)
+                scanned_pages = sum(outline.pages for outline in outlines)
+                record("scan_pdf_outline", bool(outlines), f"{scanned_pages} pages; {section_count} sections")
+                return {"outlines": [outline.as_dict() for outline in outlines], "issues": warnings}
             if not prepared:
                 kb = self._prepare_local(run.options.get("root"), issues)
                 if run.options.get("root") is not None:
@@ -78,6 +86,16 @@ class ResearchWorkflow:
                 prepared = True
             evidence = []
             task_issues = list(issues)
+
+            def add_excerpts(source: str, location: str, text: str, url: str | None = None) -> None:
+                excerpts = wrap(" ".join(text.split()), width=220, break_on_hyphens=False)
+                if len(excerpts) > 1 and len(excerpts[-1]) < 12:
+                    tail = excerpts.pop()
+                    excerpts[-1] += f" {tail}"
+                for excerpt in excerpts:
+                    if len(excerpt) >= 12:
+                        evidence.append(Evidence(f"E{len(evidence) + 1}", source, location, excerpt, url))
+
             if kb is not None:
                 try:
                     matches = kb.retrieve(task.question, limit=3)
@@ -85,15 +103,20 @@ class ResearchWorkflow:
                     record("retrieve", False, f"{task.id}: {error}")
                     task_issues.append(f"本地检索失败 · {error}")
                 else:
-                    record("retrieve", True, f"{task.id}: {len(matches)} candidates")
                     best = matches[0].score
+                    retained = []
                     for match in matches:
                         if match.score >= max(0.25, best - 0.22):
                             chunk = match.chunk
-                            evidence.append(Evidence(f"E{len(evidence) + 1}", chunk.source, chunk.location, chunk.text))
+                            retained.append(chunk)
+                            add_excerpts(chunk.source, chunk.location, chunk.text)
+                    locations = ", ".join(f"{match.chunk.location} {match.score:.2f}" for match in matches)
+                    record("retrieve", True,
+                           f"{task.id}: {len(matches)} candidates ({locations}); {len(retained)} retained")
+                    if not retained:
+                        task_issues.append(f"{task.id} · 检索到 {len(matches)} 个候选，均低于证据保留门槛。")
             for article in articles:
-                evidence.append(Evidence(f"E{len(evidence) + 1}", article.title,
-                                         "Wikipedia article introduction", article.text, article.url))
+                add_excerpts(article.title, "Wikipedia article introduction", article.text, article.url)
             budget.remaining()
             findings, gap, rejected = self._analyze(run.topic, task, tuple(evidence), prior, transcript, budget)
             reviewed = self._review(task, findings, tuple(evidence), transcript, budget) if findings else []
@@ -166,9 +189,9 @@ class ResearchWorkflow:
                     "If the sources answer any part of the question, give 1 or 2 partial or complete findings "
                     "even when another part cannot be answered. Do not discard supported partial findings. "
                     "Omit facts that are only relevant to the overall topic, not this particular question. "
-                    "Each finding must have kind finding or conflict "
-                    "and references containing exact source id and an exact short quote of 15–120 characters. "
-                    "Quote verbatim in its original language. Compare sources where relevant and use "
+                    "Each finding must have kind finding or conflict and references containing "
+                    "only the IDs of the numbered excerpts that directly support it. Do not rewrite the excerpts. "
+                    "Compare sources where relevant and use "
                     "kind conflict only for an actual disagreement supported by two sources. "
                     "In gap, briefly name only what is missing, with no source IDs or factual statements. "
                     "Use an empty gap when resolved and no findings only if nothing relevant is supported."),
@@ -176,7 +199,7 @@ class ResearchWorkflow:
         )
         data = self._ask(messages, FINDING_SCHEMA, transcript, budget)
         try:
-            return check_findings(data, evidence)
+            return resolve_citations(data, evidence)
         except ValueError as error:
             raise TaskFailure(f"Analysis failed: {error}", retryable=True) from error
 

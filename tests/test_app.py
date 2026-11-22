@@ -54,7 +54,7 @@ class ApiTests(unittest.TestCase):
         return Workflow()
 
     @patch("research_agent.app.service.ResearchWorkflow")
-    @patch("research_agent.app.service.Planner")
+    @patch("research_agent.research.outline.Planner")
     def test_upload_submit_status_history_follow_up_and_report(self, planner, workflow):
         planner.return_value.plan.return_value = TaskManager((Task("a", "Question"),))
         workflow.side_effect = self._workflow
@@ -77,7 +77,14 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(follow_up.status_code, 202)
         next_job = self._finished(follow_up.json()["id"])
         self.assertEqual(next_job["documents"], finished["documents"])
-        self.assertIn("Previous topic for context: Test topic", planner.return_value.plan.call_args.args[0])
+        planner.return_value.plan.assert_called_with("Follow-up")
+        contextual = self.client.post("/jobs", json={
+            "topic": "Contextual follow-up", "parent_id": key, "include_previous_topic": True,
+            "reuse_documents": False, "documents": [uploaded.json()["id"]],
+        })
+        self.assertEqual(contextual.status_code, 202)
+        self._finished(contextual.json()["id"])
+        planner.return_value.plan.assert_called_with("Contextual follow-up", context="Test topic")
 
     def _finished(self, key):
         end = time.monotonic() + 5
